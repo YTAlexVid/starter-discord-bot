@@ -1,113 +1,101 @@
-
-// const { clientId, guildId, token, publicKey } = require('./config.json');
-require('dotenv').config()
-const APPLICATION_ID = process.env.APPLICATION_ID 
-const TOKEN = process.env.TOKEN 
-const PUBLIC_KEY = process.env.PUBLIC_KEY || 'not set'
-const GUILD_ID = process.env.GUILD_ID 
-
-
-const axios = require('axios')
-const express = require('express');
-const { InteractionType, InteractionResponseType, verifyKeyMiddleware } = require('discord-interactions');
-
-
-const app = express();
-// app.use(bodyParser.json());
-
-const discord_api = axios.create({
-  baseURL: 'https://discord.com/api/',
-  timeout: 3000,
-  headers: {
-	"Access-Control-Allow-Origin": "*",
-	"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE",
-	"Access-Control-Allow-Headers": "Authorization",
-	"Authorization": `Bot ${TOKEN}`
-  }
+const { Client, GatewayIntentBits } = require("discord.js");
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMembers,
+    ]
 });
 
+client.debug = false;
 
-
-
-app.post('/interactions', verifyKeyMiddleware(PUBLIC_KEY), async (req, res) => {
-  const interaction = req.body;
-
-  if (interaction.type === InteractionType.APPLICATION_COMMAND) {
-    console.log(interaction.data.name)
-    if(interaction.data.name == 'yo'){
-      return res.send({
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          content: `Yo ${interaction.member.user.username}!`,
-        },
-      });
+function secsToTime(num) {
+    var hours = Math.floor(num / 3600);
+    var minutes = Math.floor((num - (hours * 3600)) / 60);
+    var seconds = num - (hours * 3600) - (minutes * 60);
+    if (hours < 10) { hours = "0" + hours; }
+    if (minutes < 10) { minutes = "0" + minutes; }
+    if (seconds < 10) { seconds = "0" + seconds; }
+    return hours + ':' + minutes + ':' + seconds;
+}
+function rainTimer() {
+    const UTCPrevThunderstorm = 1668474356000;
+    const UTCNow = new Date().getTime();
+    const base = Math.floor((UTCNow - UTCPrevThunderstorm) / 1000);
+    const thunderstorm = base % ((3850 + 1000) * 4);
+    if (thunderstorm < (3850 * 4 + 1000 * 3)) {
+        return (3850 * 4 + 1000 * 3 - thunderstorm);
+    } else {
+        return -1;
     }
+}
 
-    if(interaction.data.name == 'dm'){
-      // https://discord.com/developers/docs/resources/user#create-dm
-      let c = (await discord_api.post(`/users/@me/channels`,{
-        recipient_id: interaction.member.user.id
-      })).data
-      try{
-        // https://discord.com/developers/docs/resources/channel#create-message
-        let res = await discord_api.post(`/channels/${c.id}/messages`,{
-          content:'Yo! I got your slash command. I am not able to respond to DMs just slash commands.',
-        })
-        console.log(res.data)
-      }catch(e){
-        console.log(e)
-      }
+function rainMsg(channel) {
+    channel.send('<@&1082990255621292063> До начала грозы: ' + secsToTime(rainTimer()));
+}
 
-      return res.send({
-        // https://discord.com/developers/docs/interactions/receiving-and-responding#responding-to-an-interaction
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data:{
-          content:'👍'
+function clearChannel() {
+    channel.purge()
+}
+
+function thunder() {
+    remind_channel = client.channels.cache.get('1057329106204753941');
+    if (rainTimer() < 30 && rainTimer() > 20) {
+        rainMsg(remind_channel)
+    }
+    else if (rainTimer() < 60 && rainTimer() > 50) {
+        rainMsg(remind_channel)
+    }
+    else if (rainTimer() < 300 && rainTimer() > 290) {
+        rainMsg(remind_channel)
+    }
+    else if (rainTimer() < 600 && rainTimer() > 590) {
+        rainMsg(remind_channel)
+    }
+    else if (rainTimer() < 1800 && rainTimer() > 1790) {
+        //clearChannel(remind_channel)
+        rainMsg(remind_channel)
+    }
+}
+
+function thunderTest() {
+    if (client.debug) {
+        rainMsg(client.debugChannel);
+    }
+}
+
+client.on("ready", () => {
+    console.log("I am ready!");
+    setInterval(thunder, 10000);
+    setInterval(thunderTest, 10000);
+});
+
+client.on("messageCreate", (message) => {
+    if (message.content.startsWith("isAlive?")) {
+        if (message.author.id === '365916768805453834') {
+            message.channel.send("yes");
         }
-      });
     }
-  }
+    if (message.content.startsWith("test")) {
+        if (message.author.id === '365916768805453834') {
+            rainMsg(client.channels.cache.get('1057329106204753941'));
+        }
+    }
+    if (message.content.startsWith("start debug")) {
+        if (message.author.id === '365916768805453834') {
+            message.channel.send('Debug Started!');
+            client.debug = true;
+            client.debugChannel = message.channel;
+        }
+    }
+    if (message.content.startsWith("stop debug")) {
+        if (message.author.id === '365916768805453834') {
+            message.channel.send('Debug Stopped!');
 
+            client.debug = false;
+        }
+    }
 });
 
-
-
-app.get('/register_commands', async (req,res) =>{
-  let slash_commands = [
-    {
-      "name": "yo",
-      "description": "replies with Yo!",
-      "options": []
-    },
-    {
-      "name": "dm",
-      "description": "sends user a DM",
-      "options": []
-    }
-  ]
-  try
-  {
-    // api docs - https://discord.com/developers/docs/interactions/application-commands#create-global-application-command
-    let discord_response = await discord_api.put(
-      `/applications/${APPLICATION_ID}/guilds/${GUILD_ID}/commands`,
-      slash_commands
-    )
-    console.log(discord_response.data)
-    return res.send('commands have been registered')
-  }catch(e){
-    console.error(e.code)
-    console.error(e.response?.data)
-    return res.send(`${e.code} error from discord`)
-  }
-})
-
-
-app.get('/', async (req,res) =>{
-  return res.send('Follow documentation ')
-})
-
-
-app.listen(8999, () => {
-
-})
-
+client.login("MTA4Mjk3Mjg3NDQ1MDY3NzgyMA.GqRRVK.CvN99enVmF8TmLLK4xE7MiQ9-sHPdIv717-Atw");
